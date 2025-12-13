@@ -1,0 +1,142 @@
+[
+  {
+    "symptom": "headache",
+    "drugs": ["ibuprofen", "paracetamol", "aspirin"]
+  },
+  {
+    "symptom": "fever",
+    "drugs": ["paracetamol", "ibuprofen", "aspirin"]
+  },
+  {
+    "symptom": "muscle pain",
+    "drugs": ["ibuprofen", "naproxen", "acetaminophen"]
+  },
+  {
+    "symptom": "cough",
+    "drugs": ["dextromethorphan", "guaifenesin", "codeine"]
+  },
+  {
+    "symptom": "cold",
+    "drugs": ["pseudoephedrine", "loratadine", "acetaminophen"]
+  },
+  {
+    "symptom": "sore throat",
+    "drugs": ["acetaminophen", "ibuprofen", "benzocaine"]
+  },
+  {
+    "symptom": "nausea",
+    "drugs": ["ondansetron", "dimenhydrinate", "meclizine"]
+  },
+  {
+    "symptom": "diarrhea",
+    "drugs": ["loperamide", "oral rehydration salts", "bismuth subsalicylate"]
+  },
+  {
+    "symptom": "allergy",
+    "drugs": ["loratadine", "cetirizine", "fexofenadine"]
+  },
+  {
+    "symptom": "asthma",
+    "drugs": ["albuterol", "budesonide", "montelukast"]
+  },
+  {
+    "symptom": "indigestion",
+    "drugs": ["omeprazole", "ranitidine", "famotidine"]
+  },
+  {
+    "symptom": "insomnia",
+    "drugs": ["diphenhydramine", "melatonin", "zolpidem"]
+  },
+  {
+    "symptom": "anxiety",
+    "drugs": ["alprazolam", "lorazepam", "buspirone"]
+  },
+  {
+    "symptom": "depression",
+    "drugs": ["fluoxetine", "sertraline", "escitalopram"]
+  },
+  {
+    "symptom": "high blood pressure",
+    "drugs": ["amlodipine", "lisinopril", "hydrochlorothiazide"]
+  },
+  {
+    "symptom": "low blood pressure",
+    "drugs": ["midodrine", "fludrocortisone"]
+  },
+  {
+    "symptom": "chest pain",
+    "drugs": ["nitroglycerin", "aspirin", "metoprolol"]
+  },
+  {
+    "symptom": "back pain",
+    "drugs": ["ibuprofen", "acetaminophen", "naproxen"]
+  },
+  {
+    "symptom": "joint pain",
+    "drugs": ["ibuprofen", "naproxen", "celecoxib"]
+  },
+  {
+    "symptom": "skin rash",
+    "drugs": ["hydrocortisone", "diphenhydramine", "loratadine"]
+  },
+  {
+    "symptom": "itching",
+    "drugs": ["diphenhydramine", "loratadine", "hydrocortisone"]
+  },
+  {
+    "symptom": "vomiting",
+    "drugs": ["ondansetron", "dimenhydrinate", "meclizine"]
+  },
+  {
+    "symptom": "fatigue",
+    "drugs": ["caffeine", "modafinil", "methylphenidate"]
+  },
+  {
+    "symptom": "dizziness",
+    "drugs": ["meclizine", "dimenhydrinate", "betahistine"]
+  },
+  {
+    "symptom": "constipation",
+    "drugs": ["docusate", "psyllium", "lactulose"]
+  },
+  {
+    "symptom": "heartburn",
+    "drugs": ["omeprazole", "ranitidine", "famotidine"]
+  },
+  {
+    "symptom": "shortness of breath",
+    "drugs": ["albuterol", "budesonide", "prednisone"]
+  },
+  {
+    "symptom": "swelling",
+    "drugs": ["furosemide", "hydrochlorothiazide", "spironolactone"]
+  },
+  {
+    "symptom": "feeling weak",
+    "drugs": ["caffeine", "modafinil", "methylphenidate"]
+  },
+  {
+    "symptom": "feeling tired",
+    "drugs": ["caffeine", "modafinil", "methylphenidate"]
+  },
+  {
+    "symptom": "feeling dizzy",
+    "drugs": ["meclizine", "dimenhydrinate", "betahistine"]
+  },
+  {
+    "symptom": "feeling nauseous",
+    "drugs": ["ondansetron", "dimenhydrinate", "meclizine"]
+  },
+  {
+    "symptom": "feeling anxious",
+    "drugs": ["alprazolam", "lorazepam", "buspirone"]
+  },
+  {
+    "symptom": "feeling depressed",
+    "drugs": ["fluoxetine", "sertraline", "escitalopram"]
+  },
+  {
+    "symptom": "feeling sleepy",
+    "drugs": ["modafinil", "methylphenidate", "caffeine"]
+  }
+]

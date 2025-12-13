@@ -6,5 +6,5 @@ venv/
 __pycache__/
 *.pyc
 
-# Operating System Files
-.DS_Store
+# Database and Index Folders (ADD THIS LINE)
+chroma_db_meds/
