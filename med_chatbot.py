@@ -3,6 +3,11 @@ import json
 import re
 import streamlit as st
 import pandas as pd
+import cv2
+import numpy as np
+from PIL import Image
+import speech_recognition as sr
+import easyocr
 from fuzzywuzzy import process
 from deep_translator import GoogleTranslator
 from langchain_chroma import Chroma
@@ -12,10 +17,19 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel, Field
+import base64
 
 # Constants
 VECTOR_STORE_PATH = "chroma_db_meds"
 EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
+
+# Initialize OCR reader
+@st.cache_resource
+def get_ocr_reader():
+    return easyocr.Reader(['en'])
+
+# Initialize speech recognizer
+recognizer = sr.Recognizer()
 
 # Define Pydantic schema for reminder plan
 class ReminderPlan(BaseModel):
@@ -36,6 +50,44 @@ SUPPORTED_LANGUAGES = {
     "Japanese": "ja",
     "Russian": "ru"
 }
+
+# Voice input function
+def voice_to_text():
+    try:
+        with sr.Microphone() as source:
+            st.info("🎤 Listening... Speak now!")
+            audio = recognizer.listen(source, timeout=5)
+            text = recognizer.recognize_google(audio)
+            return text
+    except sr.UnknownValueError:
+        st.error("Could not understand audio")
+        return ""
+    except sr.RequestError:
+        st.error("Could not request results from Google Speech Recognition service")
+        return ""
+    except Exception as e:
+        st.error(f"Voice recognition error: {e}")
+        return ""
+
+# Image OCR function
+def image_to_text(image):
+    try:
+        reader = get_ocr_reader()
+        result = reader.readtext(np.array(image))
+        text = " ".join([detection[1] for detection in result])
+        return text
+    except Exception as e:
+        st.error(f"OCR error: {e}")
+        return ""
+
+# Load symptom data
+@st.cache_data
+def load_symptom_data():
+    try:
+        with open("symptoms_to_drugs.json", "r") as f:
+            return json.load(f)
+    except:
+        return []
 
 # Load or create the vector store
 @st.cache_resource
@@ -164,11 +216,6 @@ def generate_reminder_json(question: str):
     )
     return sample_plan.model_dump()
 
-# Load symptom data
-def load_symptom_data():
-    with open("symptoms_to_drugs.json", "r") as f:
-        return json.load(f)
-
 # Hybrid search function
 def hybrid_search(symptom: str, symptom_data: list) -> list:
     for item in symptom_data:
@@ -206,13 +253,39 @@ def main():
         selected_language = st.selectbox("Select Language", list(SUPPORTED_LANGUAGES.keys()))
         target_lang = SUPPORTED_LANGUAGES[selected_language]
 
+        st.header("Input Method")
+        input_method = st.radio("Select Input Method", ["Text", "Voice", "Image"])
+
     # Display chat history
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
     # User input
-    if prompt := st.chat_input("Ask a question about a drug, symptoms, or request a reminder..."):
+    if input_method == "Text":
+        prompt = st.chat_input("Ask a question about a drug, symptoms, or request a reminder...")
+    elif input_method == "Voice":
+        if st.button("🎙️ Record Voice"):
+            prompt = voice_to_text()
+            st.text_area("Voice Input", prompt)
+        else:
+            prompt = ""
+    elif input_method == "Image":
+        uploaded_file = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
+        if uploaded_file is not None:
+            image = Image.open(uploaded_file)
+            st.image(image, caption="Uploaded Image", width="stretch")
+            if st.button("Extract Text"):
+                prompt = image_to_text(image)
+                st.text_area("Extracted Text", prompt)
+            else:
+                prompt = ""
+        else:
+            prompt = ""
+    else:
+        prompt = ""
+
+    if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -240,41 +313,41 @@ def main():
                         answer = rag_chain.invoke(prompt)
                         st.markdown(f"**Drug Info:**\n{answer}")
 
-                        # Dosage calculator
-                        dosage = calculate_dosage("ibuprofen", st.session_state.user_profile["age"], st.session_state.user_profile["weight"], "pain")
-                        st.markdown(f"**Dosage:** {dosage}")
+                    # Dosage calculator
+                    dosage = calculate_dosage("ibuprofen", st.session_state.user_profile["age"], st.session_state.user_profile["weight"], "pain")
+                    st.markdown(f"**Dosage:** {dosage}")
 
-                        # Drug search and suggestion
-                        drug_list = ["paracetamol", "ibuprofen", "aspirin", "amoxicillin", "metformin"]
-                        suggested_drug = suggest_drug(prompt, drug_list)
-                        if suggested_drug:
-                            st.markdown(f"**Did you mean:** {suggested_drug}?")
+                    # Drug search and suggestion
+                    drug_list = ["paracetamol", "ibuprofen", "aspirin", "amoxicillin", "metformin"]
+                    suggested_drug = suggest_drug(prompt, drug_list)
+                    if suggested_drug:
+                        st.markdown(f"**Did you mean:** {suggested_drug}?")
 
-                        # Multi-drug reminder plans
-                        multi_drug_plans = generate_multi_drug_reminder_json([prompt])
-                        for plan in multi_drug_plans:
-                            st.markdown("### Reminder Plan (JSON)")
-                            st.json(plan)
+                    # Multi-drug reminder plans
+                    multi_drug_plans = generate_multi_drug_reminder_json([prompt])
+                    for plan in multi_drug_plans:
+                        st.markdown("### Reminder Plan (JSON)")
+                        st.json(plan)
 
-                            # Medication schedule calendar
-                            st.markdown("### Medication Schedule Calendar")
-                            st.table(create_calendar(plan["schedule"]))
+                        # Medication schedule calendar
+                        st.markdown("### Medication Schedule Calendar")
+                        st.table(create_calendar(plan["schedule"]))
 
-                        # Export reminder plan
-                        st.download_button(
-                            label="Download Reminder Plan",
-                            data=export_reminder_plan(plan),
-                            file_name="reminder_plan.json",
-                            mime="application/json"
-                        )
+                    # Export reminder plan
+                    st.download_button(
+                        label="Download Reminder Plan",
+                        data=export_reminder_plan(plan),
+                        file_name="reminder_plan.json",
+                        mime="application/json"
+                    )
 
-                        # Multi-language support
-                        translated = translate_text(answer, target_lang)
-                        st.markdown(f"**Translated ({selected_language}):** {translated}")
+                    # Multi-language support
+                    translated = translate_text(answer, target_lang)
+                    st.markdown(f"**Translated ({selected_language}):** {translated}")
 
-                        # Append to chat history
-                        full_response = f"**Drug Info:**\n{answer}\n\n**Dosage:** {dosage}\n\n---"
-                        st.session_state.messages.append({"role": "assistant", "content": full_response})
+                    # Append to chat history
+                    full_response = f"**Drug Info:**\n{answer}\n\n**Dosage:** {dosage}\n\n---"
+                    st.session_state.messages.append({"role": "assistant", "content": full_response})
                 except Exception as e:
                     st.error(f"Error during RAG chaining: {e}")
 
