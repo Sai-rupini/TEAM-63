@@ -46,3 +46,4 @@ vectorstore = Chroma.from_documents(
     persist_directory=VECTOR_STORE_PATH
 )
 print("Index built and saved!")
+

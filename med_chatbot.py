@@ -136,7 +136,6 @@ def get_llm():
         return None
 
 
-# Build the RAG question-answering chain
 @st.cache_resource
 def get_rag_chain():
     vectorstore = get_vectorstore()
