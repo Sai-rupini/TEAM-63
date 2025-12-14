@@ -8,3 +8,5 @@ __pycache__/
 
 # Database and Index Folders (ADD THIS LINE)
 chroma_db_meds/
+
+drugs/drug-label-0013-of-0013.json
