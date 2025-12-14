@@ -17,19 +17,22 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel, Field
-import base64
+
 
 # Constants
 VECTOR_STORE_PATH = "chroma_db_meds"
 EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
+
 
 # Initialize OCR reader
 @st.cache_resource
 def get_ocr_reader():
     return easyocr.Reader(['en'])
 
+
 # Initialize speech recognizer
 recognizer = sr.Recognizer()
+
 
 # Define Pydantic schema for reminder plan
 class ReminderPlan(BaseModel):
@@ -37,6 +40,7 @@ class ReminderPlan(BaseModel):
     dosage: str = Field(description="Dosage, e.g., '200 mg'.")
     schedule: list[str] = Field(description="Times to take, e.g., ['8:00 AM', '8:00 PM'].")
     rationale: str = Field(description="Brief reason for the schedule.")
+
 
 # Supported languages
 SUPPORTED_LANGUAGES = {
@@ -48,8 +52,10 @@ SUPPORTED_LANGUAGES = {
     "Arabic": "ar",
     "Chinese": "zh",
     "Japanese": "ja",
-    "Russian": "ru"
+    "Russian": "ru",
+    "Telugu": "te"
 }
+
 
 # Voice input function
 def voice_to_text():
@@ -69,6 +75,7 @@ def voice_to_text():
         st.error(f"Voice recognition error: {e}")
         return ""
 
+
 # Image OCR function
 def image_to_text(image):
     try:
@@ -80,14 +87,6 @@ def image_to_text(image):
         st.error(f"OCR error: {e}")
         return ""
 
-# Load symptom data
-@st.cache_data
-def load_symptom_data():
-    try:
-        with open("symptoms_to_drugs.json", "r") as f:
-            return json.load(f)
-    except:
-        return []
 
 # Load or create the vector store
 @st.cache_resource
@@ -99,6 +98,34 @@ def get_vectorstore():
         st.error(f"Error loading vector store: {e}")
         return None
 
+
+# Get all unique drug names from Chroma DB
+@st.cache_resource
+def get_all_drugs():
+    vectorstore = get_vectorstore()
+    if vectorstore is None:
+        return []
+    result = vectorstore.get()
+    drugs = set()
+    for metadata in result.get("metadatas", []):
+        drug = metadata.get("generic_name", "").strip()
+        if drug:
+            drugs.add(drug)
+    return list(drugs)
+
+
+# Search drugs by symptom from Chroma DB
+def search_drugs_by_symptom(symptom: str, vectorstore):
+    query = f"drugs for {symptom}"
+    docs = vectorstore.similarity_search(query, k=5)
+    drugs = []
+    for doc in docs:
+        drug = doc.metadata.get("generic_name", "").strip()
+        if drug:
+            drugs.append(drug)
+    return drugs
+
+
 # Setup the language model
 @st.cache_resource
 def get_llm():
@@ -108,16 +135,19 @@ def get_llm():
         st.error(f"Error connecting to Ollama: {e}")
         return None
 
+
 # Build the RAG question-answering chain
 @st.cache_resource
 def get_rag_chain():
     vectorstore = get_vectorstore()
     if vectorstore is None:
+        st.error("Vectorstore not loaded. Check your Chroma DB path and data.")
         return None
     llm = get_llm()
     if llm is None:
+        st.error("LLM not loaded. Check your Ollama connection and model.")
         return None
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 1})  # Reduce k for speed
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 1})
 
     template = """
 You are a helpful Medication Assistant. Answer ONLY based on the following context from drug labels.
@@ -144,68 +174,60 @@ Also, list any side effects and warnings if available.
     )
     return rag_chain
 
-# Dosage calculator
-def calculate_dosage(drug_name: str, age: int, weight: int, condition: str) -> str:
-    if drug_name.lower() == "ibuprofen":
-        if age >= 12 and weight >= 40:
-            return "200-400 mg every 4-6 hours"
-        else:
-            return "Consult a healthcare provider"
-    return "Consult a healthcare provider"
 
-# Drug search and suggestion
+# Dosage calculator (dynamic from Chroma DB)
+def get_dosage_info(drug_name: str, vectorstore):
+    query = f"dosage for {drug_name}"
+    docs = vectorstore.similarity_search(query, k=1)
+    if docs:
+        return docs[0].page_content
+    return "Dosage information not found"
+
+
+# Drug search and suggestion (dynamic)
 def suggest_drug(drug_name: str, drug_list: list) -> str:
     best_match, score = process.extractOne(drug_name, drug_list)
     if score > 70:
         return best_match
     return None
 
-# Multi-drug reminder plans
-def generate_multi_drug_reminder_json(questions: list) -> list:
+
+# Multi-drug reminder plans (dynamic)
+def generate_multi_drug_reminder_json(questions: list, vectorstore):
     plans = []
     for question in questions:
-        plan = generate_reminder_json(question)
+        plan = generate_reminder_json(question, vectorstore)
         plans.append(plan)
     return plans
+
 
 # Export reminder plan
 def export_reminder_plan(plan: dict, format: str = "json"):
     if format == "json":
         return json.dumps(plan, indent=4)
-    # Add CSV logic if needed
+
 
 # Medication schedule calendar
 def create_calendar(schedule: list):
     df = pd.DataFrame(schedule, columns=["Time"])
     return df
 
+
 # Multi-language support
 def translate_text(text: str, target_lang: str) -> str:
     translator = GoogleTranslator(source='auto', target=target_lang)
     return translator.translate(text)
 
-# Generate reminder JSON
-def generate_reminder_json(question: str):
-    drug_match = re.search(r"paracetamol|ibuprofen|aspirin|amoxicillin|metformin|drug|medication", question, re.IGNORECASE)
-    dosage_match = re.search(r"(\d+)\s*mg", question, re.IGNORECASE)
-    frequency_match = re.search(r"twice|two times|thrice|three times|once|four times", question, re.IGNORECASE)
 
+# Generate reminder JSON (dynamic)
+def generate_reminder_json(question: str, vectorstore):
+    drug_match = re.search(r"(\w+)", question, re.IGNORECASE)
     drug_name = drug_match.group(0).title() if drug_match else "Generic Drug"
-    dosage = f"{dosage_match.group(1)} mg" if dosage_match else "Standard dose"
+    dosage_info = get_dosage_info(drug_name, vectorstore)
+    dosage = dosage_info if dosage_info else "Standard dose"
 
-    if frequency_match:
-        freq = frequency_match.group(0).lower()
-        if "twice" in freq or "two times" in freq:
-            schedule = ["8:00 AM", "8:00 PM"]
-        elif "thrice" in freq or "three times" in freq:
-            schedule = ["8:00 AM", "2:00 PM", "8:00 PM"]
-        elif "four times" in freq:
-            schedule = ["8:00 AM", "12:00 PM", "4:00 PM", "8:00 PM"]
-        else:
-            schedule = ["8:00 AM"]
-    else:
-        schedule = ["8:00 AM", "8:00 PM"]
-
+    # Default schedule (can be made dynamic based on dosage info)
+    schedule = ["8:00 AM", "8:00 PM"]
     rationale = f"Default {drug_name} {dosage} schedule. Adjust based on actual drug and your healthcare provider's advice."
 
     sample_plan = ReminderPlan(
@@ -216,12 +238,6 @@ def generate_reminder_json(question: str):
     )
     return sample_plan.model_dump()
 
-# Hybrid search function
-def hybrid_search(symptom: str, symptom_data: list) -> list:
-    for item in symptom_data:
-        if item["symptom"].lower() == symptom.lower():
-            return item["drugs"]
-    return []
 
 # Main Streamlit app
 def main():
@@ -237,11 +253,17 @@ def main():
     # Load or create RAG chain
     rag_chain = get_rag_chain()
     if rag_chain is None:
-        st.error("Failed to load resources. Check data and environment.")
+        st.error("Failed to load RAG chain. Check your resources.")
         return
 
-    # Load symptom data
-    symptom_data = load_symptom_data()
+    # Load vectorstore
+    vectorstore = get_vectorstore()
+    if vectorstore is None:
+        st.error("Failed to load vector store. Check your Chroma DB path and data.")
+        return
+
+    # Get all drugs from Chroma DB
+    drug_list = get_all_drugs()
 
     # Sidebar for user profile and language selection
     with st.sidebar:
@@ -298,33 +320,38 @@ def main():
                     symptom_match = re.search(r"symptom|headache|fever|muscle pain|cough|cold", prompt, re.IGNORECASE)
                     if symptom_match:
                         symptom = symptom_match.group(0)
-                        drugs = hybrid_search(symptom, symptom_data)
+                        drugs = search_drugs_by_symptom(symptom, vectorstore)
                         if drugs:
                             st.markdown(f"**Recommended drugs for {symptom}:** {', '.join(drugs)}")
                             for drug in drugs:
                                 drug_prompt = f"What are the indications and dosage for {drug}?"
-                                answer = rag_chain.invoke(drug_prompt)
-                                st.markdown(f"**Drug Info for {drug}:**\n{answer}")
-                                dosage = calculate_dosage(drug, st.session_state.user_profile["age"], st.session_state.user_profile["weight"], "pain")
-                                st.markdown(f"**Dosage for {drug}:** {dosage}")
+                                try:
+                                    answer = rag_chain.invoke(drug_prompt)
+                                    st.markdown(f"**Drug Info for {drug}:**\n{answer}")
+                                    dosage = get_dosage_info(drug, vectorstore)
+                                    st.markdown(f"**Dosage for {drug}:** {dosage}")
+                                except Exception as e:
+                                    st.error(f"Error retrieving info for {drug}: {e}")
                         else:
                             st.markdown("No drugs found for this symptom.")
                     else:
-                        answer = rag_chain.invoke(prompt)
-                        st.markdown(f"**Drug Info:**\n{answer}")
+                        try:
+                            answer = rag_chain.invoke(prompt)
+                            st.markdown(f"**Drug Info:**\n{answer}")
+                        except Exception as e:
+                            st.error(f"Error retrieving drug info: {e}")
 
-                    # Dosage calculator
-                    dosage = calculate_dosage("ibuprofen", st.session_state.user_profile["age"], st.session_state.user_profile["weight"], "pain")
+                    # Dosage calculator (dynamic)
+                    dosage = get_dosage_info("ibuprofen", vectorstore)
                     st.markdown(f"**Dosage:** {dosage}")
 
-                    # Drug search and suggestion
-                    drug_list = ["paracetamol", "ibuprofen", "aspirin", "amoxicillin", "metformin"]
+                    # Drug search and suggestion (dynamic)
                     suggested_drug = suggest_drug(prompt, drug_list)
                     if suggested_drug:
                         st.markdown(f"**Did you mean:** {suggested_drug}?")
 
-                    # Multi-drug reminder plans
-                    multi_drug_plans = generate_multi_drug_reminder_json([prompt])
+                    # Multi-drug reminder plans (dynamic)
+                    multi_drug_plans = generate_multi_drug_reminder_json([prompt], vectorstore)
                     for plan in multi_drug_plans:
                         st.markdown("### Reminder Plan (JSON)")
                         st.json(plan)
@@ -342,14 +369,18 @@ def main():
                     )
 
                     # Multi-language support
-                    translated = translate_text(answer, target_lang)
-                    st.markdown(f"**Translated ({selected_language}):** {translated}")
+                    try:
+                        translated = translate_text(answer, target_lang)
+                        st.markdown(f"**Translated ({selected_language}):** {translated}")
+                    except Exception as e:
+                        st.error(f"Translation error: {e}")
 
                     # Append to chat history
                     full_response = f"**Drug Info:**\n{answer}\n\n**Dosage:** {dosage}\n\n---"
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
                 except Exception as e:
                     st.error(f"Error during RAG chaining: {e}")
+
 
 if __name__ == "__main__":
     main()

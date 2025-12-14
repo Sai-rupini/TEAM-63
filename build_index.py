@@ -6,7 +6,7 @@ from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 
-DATA_DIR = "D:\\med_chatbot\\drug_labels"
+DATA_DIR = "drugs"
 VECTOR_STORE_PATH = "chroma_db_meds"
 EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
 
@@ -28,7 +28,13 @@ for jf in json_files:
         if not content.strip() and "description" in record:
             content += record["description"]
         if content.strip():
-            documents.append(Document(page_content=content, metadata={"source": jf}))
+            # Extract metadata for dynamic search
+            metadata = {
+                "source": jf,
+                "generic_name": record['openfda'].get('generic_name', ['N/A'])[0],
+                "brand_name": record['openfda'].get('brand_name', ['N/A'])[0]
+            }
+            documents.append(Document(page_content=content, metadata=metadata))
 
 splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 splits = splitter.split_documents(documents)
